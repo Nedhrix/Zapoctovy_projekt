@@ -1,96 +1,92 @@
+import shapes.*;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+import java.util.List;
 
-public class Main extends javax.swing.JFrame {
+public class Main extends JFrame {
 
-    private enum Tvary {PEN, RECT, OVAL, TRIANGLE}
+    enum ShapeType { PEN, RECT, OVAL, TRIANGLE }
 
-    private BufferedImage canvas;
-    private Graphics2D g2d;
-    private int startX, startY, endX, endY;
-    private Color aktualiBarva = Color.BLACK;
-    private Tvary aktualniTvar = Tvary.PEN;
-    private int sirkaTahu = 2;
+    BufferedImage canvas;
+    Graphics2D g2d;
+    int startX, startY;
+    Color currentColor = Color.BLACK;
+    ShapeType currentShape = ShapeType.PEN;
+    int strokeWidth = 2;
 
-    private java.util.List<DrawableShape> shapes = new ArrayList<>();
+    List<DrawableShape> shapes = new ArrayList<>();
 
     public Main() {
-        setTitle("Malovaní");
+        setTitle("Malování");
         setSize(800, 600);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
 
         canvas = new BufferedImage(800, 600, BufferedImage.TYPE_INT_RGB);
         g2d = canvas.createGraphics();
         g2d.setColor(Color.WHITE);
-        g2d.fillRect(0, 0, 800, 600);
-        g2d.setColor(aktualiBarva);
-        g2d.setStroke(new BasicStroke(sirkaTahu));
+        g2d.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
+        g2d.setColor(currentColor);
+        g2d.setStroke(new BasicStroke(strokeWidth));
 
-        JPanel panel = new JPanel();
+        JPanel topPanel = new JPanel();
+        JButton clearBtn = new JButton("Vymazat");
+        JButton colorBtn = new JButton("Barva");
+        JButton saveBtn = new JButton("Uložit jako JPG");
 
-        JButton vymazBtn = new JButton("Vymazat");
-        JButton barvaBtn = new JButton("Barva");
-        JButton ulozitBtn = new JButton("Uložit jako JPG");
-
-        String[] shapeOptions = {"Kreslit", "Čtverec", "Kolečko", "Trojúhelník"};
-        JComboBox<String> shapeSelector = new JComboBox<>(shapeOptions);
-
-        Integer[] strokeOptions = {1, 2, 3, 5, 8, 12};
-        JComboBox<Integer> strokeSelector = new JComboBox<>(strokeOptions);
-        strokeSelector.setSelectedItem(sirkaTahu);
+        JComboBox<String> shapeSelector = new JComboBox<>(new String[]{"Kreslit", "Čtverec", "Kolečko", "Trojúhelník"});
+        JComboBox<Integer> strokeSelector = new JComboBox<>(new Integer[]{1, 2, 3, 5, 8, 12});
+        strokeSelector.setSelectedItem(strokeWidth);
 
         strokeSelector.addActionListener(e -> {
-            sirkaTahu = (Integer) strokeSelector.getSelectedItem();
-            g2d.setStroke(new BasicStroke(sirkaTahu));
+            strokeWidth = (Integer) strokeSelector.getSelectedItem();
+            g2d.setStroke(new BasicStroke(strokeWidth));
         });
 
-        vymazBtn.addActionListener(e -> {
+        shapeSelector.addActionListener(e -> {
+            switch (shapeSelector.getSelectedIndex()) {
+                case 0 -> currentShape = ShapeType.PEN;
+                case 1 -> currentShape = ShapeType.RECT;
+                case 2 -> currentShape = ShapeType.OVAL;
+                case 3 -> currentShape = ShapeType.TRIANGLE;
+            }
+        });
+
+        colorBtn.addActionListener(e -> {
+            Color chosen = JColorChooser.showDialog(this, "Vyber barvu", currentColor);
+            if (chosen != null) currentColor = chosen;
+        });
+
+        clearBtn.addActionListener(e -> {
             shapes.clear();
             g2d.setColor(Color.WHITE);
             g2d.fillRect(0, 0, canvas.getWidth(), canvas.getHeight());
             repaint();
         });
 
-        barvaBtn.addActionListener(e -> {
-            Color newColor = JColorChooser.showDialog(this, "Vyber barvu", aktualiBarva);
-            if (newColor != null) {
-                aktualiBarva = newColor;
-            }
-        });
+        saveBtn.addActionListener(e -> ulozitJakoJPG());
 
-        ulozitBtn.addActionListener(e -> ulozitJakoJPG());
-
-        shapeSelector.addActionListener(e -> {
-            switch (shapeSelector.getSelectedIndex()) {
-                case 0 -> aktualniTvar = Tvary.PEN;
-                case 1 -> aktualniTvar = Tvary.RECT;
-                case 2 -> aktualniTvar = Tvary.OVAL;
-                case 3 -> aktualniTvar = Tvary.TRIANGLE;
-            }
-        });
-
-        panel.add(barvaBtn);
-        panel.add(shapeSelector);
-        panel.add(new JLabel("Tloušťka:"));
-        panel.add(strokeSelector);
-        panel.add(vymazBtn);
-        panel.add(ulozitBtn);
-        add(panel, BorderLayout.NORTH);
+        topPanel.add(colorBtn);
+        topPanel.add(shapeSelector);
+        topPanel.add(new JLabel("Tloušťka:"));
+        topPanel.add(strokeSelector);
+        topPanel.add(clearBtn);
+        topPanel.add(saveBtn);
+        add(topPanel, BorderLayout.NORTH);
 
         JPanel drawPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
+          protected void paintComponent(Graphics g) {
                 super.paintComponent(g);
                 g.drawImage(canvas, 0, 0, null);
-                for (DrawableShape shape : shapes) {
-                    shape.draw((Graphics2D) g);
-                }
+                for (DrawableShape s : shapes) s.draw((Graphics2D) g);
             }
         };
+
+        drawPanel.setBackground(Color.WHITE);
 
         drawPanel.addMouseListener(new MouseAdapter() {
             public void mousePressed(MouseEvent e) {
@@ -99,21 +95,25 @@ public class Main extends javax.swing.JFrame {
             }
 
             public void mouseReleased(MouseEvent e) {
-                endX = e.getX();
-                endY = e.getY();
-                shapes.add(new DrawableShape(aktualniTvar, startX, startY, endX, endY, aktualiBarva, sirkaTahu));
+                int endX = e.getX();
+                int endY = e.getY();
+                DrawableShape shape = switch (currentShape) {
+                    case RECT -> new RectangleShape(startX, startY, endX, endY, currentColor, strokeWidth);
+                    case OVAL -> new OvalShape(startX, startY, endX, endY, currentColor, strokeWidth);
+                    case TRIANGLE -> new TriangleShape(startX, startY, endX, endY, currentColor, strokeWidth);
+                    default -> null;
+                };
+                if (shape != null) shapes.add(shape);
                 repaint();
             }
         });
 
         drawPanel.addMouseMotionListener(new MouseMotionAdapter() {
             public void mouseDragged(MouseEvent e) {
-                if (aktualniTvar == Tvary.PEN) {
+                if (currentShape == ShapeType.PEN) {
                     int x = e.getX();
                     int y = e.getY();
-                    g2d.setColor(aktualiBarva);
-                    g2d.setStroke(new BasicStroke(sirkaTahu));
-                    g2d.drawLine(startX, startY, x, y);
+                    shapes.add(new PenStrokeSegment(startX, startY, x, y, currentColor, strokeWidth));
                     startX = x;
                     startY = y;
                     repaint();
@@ -121,31 +121,25 @@ public class Main extends javax.swing.JFrame {
             }
         });
 
-        drawPanel.setBackground(Color.WHITE);
         add(drawPanel, BorderLayout.CENTER);
     }
 
-
-    private void ulozitJakoJPG() {
-        BufferedImage vystup = new BufferedImage(canvas.getWidth(), canvas.getHeight(), BufferedImage.TYPE_INT_RGB);
-        Graphics2D g = vystup.createGraphics();
+    void ulozitJakoJPG() {
+        BufferedImage output = new BufferedImage(canvas.getWidth(), canvas.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = output.createGraphics();
         g.setColor(Color.WHITE);
-        g.fillRect(0, 0, vystup.getWidth(), vystup.getHeight());
-        g.drawImage(canvas, 0, 0, null);
-        for (DrawableShape shape : shapes) {
-            shape.draw(g);
-        }
+        g.fillRect(0, 0, output.getWidth(), output.getHeight());
+        for (DrawableShape shape : shapes) shape.draw(g);
         g.dispose();
 
         try {
-            JFileChooser fileChooser = new JFileChooser();
-            fileChooser.setDialogTitle("Uložit jako JPG");
-            if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-                java.io.File file = fileChooser.getSelectedFile();
+            JFileChooser chooser = new JFileChooser();
+            if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+                var file = chooser.getSelectedFile();
                 if (!file.getName().toLowerCase().endsWith(".jpg")) {
                     file = new java.io.File(file.getAbsolutePath() + ".jpg");
                 }
-                javax.imageio.ImageIO.write(vystup, "jpg", file);
+                javax.imageio.ImageIO.write(output, "jpg", file);
             }
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -153,42 +147,6 @@ public class Main extends javax.swing.JFrame {
     }
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> {
-            new Main().setVisible(true);
-        });
-    }
-
-    static class DrawableShape {
-        Tvary type;
-        int x1, y1, x2, y2;
-        Color color;
-        int stroke;
-
-        public DrawableShape(Tvary type, int x1, int y1, int x2, int y2, Color color, int stroke) {
-            this.type = type;
-            this.x1 = Math.min(x1, x2);
-            this.y1 = Math.min(y1, y2);
-            this.x2 = Math.max(x1, x2);
-            this.y2 = Math.max(y1, y2);
-            this.color = color;
-            this.stroke = stroke;
-        }
-
-        public void draw(Graphics2D g2) {
-            g2.setColor(color);
-            g2.setStroke(new BasicStroke(stroke));
-            int w = x2 - x1;
-            int h = y2 - y1;
-
-            switch (type) {
-                case RECT -> g2.drawRect(x1, y1, w, h);
-                case OVAL -> g2.drawOval(x1, y1, w, h);
-                case TRIANGLE -> {
-                    int[] xPoints = {x1 + w / 2, x1, x2};
-                    int[] yPoints = {y1, y2, y2};
-                    g2.drawPolygon(xPoints, yPoints, 3);
-                }
-            }
-        }
+        SwingUtilities.invokeLater(() -> new Main().setVisible(true));
     }
 }
